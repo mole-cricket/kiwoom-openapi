@@ -46,7 +46,7 @@ class Kiwoom(QMainWindow):
 		if text == "코스피":
 			self.sMarket = "0"		# kospi
 		else:
-			self.sMarket = "10"		# kosdak
+			self.sMarket = "10"		# kosdaq
 
 	def event_connect(self, err_code):
 		if err_code == 0:

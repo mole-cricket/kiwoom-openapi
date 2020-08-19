@@ -36,7 +36,7 @@ codeDataType = ["text", "text", "text", "int", "int",
 dbPath = "c:/StockDB/"
 stockDb = "myStock.db"
 kospiTable = "kospi"
-kosdakTable = "kosdak"
+kosdaqTable = "kosdaq"
 
 class Communicate(QObject):
 	codelist_work = pyqtSignal()
@@ -111,8 +111,8 @@ class Kiwoom(QMainWindow):
 
 		# check & create kospi table
 		self.createMarketTable(kospiTable)
-		# check & create kosdak table
-		self.createMarketTable(kosdakTable)
+		# check & create kosdaq table
+		self.createMarketTable(kosdaqTable)
 
 	def login(self):
 		# Connect
@@ -129,8 +129,8 @@ class Kiwoom(QMainWindow):
 			self.sMarket = "0"		# kospi
 			self.curMarketTable = kospiTable
 		else:
-			self.sMarket = "10"		# kosdak
-			self.curMarketTable = kosdakTable
+			self.sMarket = "10"		# kosdaq
+			self.curMarketTable = kosdaqTable
 
 	def event_connect(self, err_code):
 		if err_code == 0:
