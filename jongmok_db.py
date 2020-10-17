@@ -1,6 +1,7 @@
 import sys
 import time
 import sqlite3
+from datetime import datetime
 
 from PyQt5.QtWidgets import *
 from PyQt5.QAxContainer import *
@@ -22,7 +23,7 @@ codeDataName = ["종목코드", "종목명", "결산월", "액면가", "자본�
 				"고가", "저가", "상한가", "하한가", "기준가",
 				"예상체결가", "예상체결수량", "D250최고가일", "D250최고가대비율", "D250최저가일",
 				"D250최저가대비율", "현재가", "대비기호", "전일대비", "등락율",
-				"거래량", "거래대비", "액면가단위", "유통주식", "유통비율"]
+				"거래량", "거래대비", "액면가단위", "유통주식", "유통비율", "입력일"]
 codeDataType = ["text", "text", "text", "int", "int",
 				"int", "real", "int", "int", "int",
 				"real", "real", "int", "real", "real",
@@ -31,7 +32,7 @@ codeDataType = ["text", "text", "text", "int", "int",
 				"int", "int", "int", "int", "int",
 				"int", "int", "text", "real", "text",
 				"real", "int", "int", "int", "real",
-				"int", "real", "text", "int", "real"]
+				"int", "real", "text", "int", "real", "text"]
 
 dbPath = "c:/StockDB/"
 stockDb = "myStock.db"
@@ -44,6 +45,7 @@ class Communicate(QObject):
 class Kiwoom(QMainWindow):
 	def __init__(self):
 		super().__init__()
+		self.getToday()
 		self.initUI()
 		self.initSignal()
 		self.initDB()
@@ -55,7 +57,7 @@ class Kiwoom(QMainWindow):
 		self.transaction = 0
 
 	def initUI(self):
-		self.setWindowTitle("종목검색")
+		self.setWindowTitle("종목DB구축")
 		self.setGeometry(300, 300, 2000, 800)
 
 		self.statusBar().showMessage("Not Connected")
@@ -66,11 +68,18 @@ class Kiwoom(QMainWindow):
 		self.Market_combo.setGeometry(20, 20, 130, 30)
 		self.Market_combo.activated[str].connect(self.market_combo_activated)
 
-		self.JongMok_button = QPushButton('종목조회', self)
+		# 가져오기 버튼: DB를 검색해서 코드가 존재하면 스킵, 존재하지 않으면 정보를 테이블에 입력한다.
+		self.JongMok_button = QPushButton('가져오기', self)
 		self.JongMok_button.move(160, 20)
 		self.JongMok_button.clicked.connect(self.jongmok_button_clicked)
 		self.JongMok_button.setFocus()
 		self.JongMok_button.setEnabled(False)
+
+		# 업데이트 버튼: 오늘 날짜가 아닌 레코드를 모두 찾아 업데이트 한다.
+		self.Update_button = QPushButton('업데이트', self)
+		self.Update_button.move(280, 20)
+		self.Update_button.clicked.connect(self.update_button_clicked)
+		self.Update_button.setEnabled(False)
 
 		self.JongMok_result = QTextEdit(self)
 		self.JongMok_result.setGeometry(10, 60, 1980, 700)
@@ -79,6 +88,10 @@ class Kiwoom(QMainWindow):
 	def initSignal(self):
 		self.c = Communicate()
 		self.c.codelist_work.connect(self.get_codelist)
+
+	def getToday(self):
+		self.today = datetime.today().strftime("%Y-%m-%d")
+		debug_print(self.today)
 
 	def createMarketField(self):
 		field = "("
@@ -136,10 +149,12 @@ class Kiwoom(QMainWindow):
 		if err_code == 0:
 			self.statusBar().showMessage("Connected")
 			self.JongMok_button.setEnabled(True)
+			self.Update_button.setEnabled(True)
 		else:
 			self.statusBar().showMessage("Connection Failed (err:%d)" % err_code)
 
 	def jongmok_button_clicked(self):
+		self.data_mode = "insert"
 		self.transaction = 0
 		self.JongMok_button.setDisabled(True)
 		self.JongMok_result.clear()
@@ -150,6 +165,23 @@ class Kiwoom(QMainWindow):
 		if len(self.code_list) > 1:
 			self.code_list = self.code_list[:-1] # remove last null item due to split(';')
 
+		# emit signal to start insert
+		self.c.codelist_work.emit()
+
+	def update_button_clicked(self):
+		self.data_mode = "update"
+		self.transaction = 0
+		self.Update_button.setDisabled(True)
+		self.JongMok_result.clear()
+		self.print_header_line()
+
+		self.code_list = self.get_old_jongmok_in_db()
+		if len(self.code_list) == 0:
+			# Do nothing when all records are updated
+			self.Update_button.setDisabled(False)
+			return
+
+		# emit signal to start update
 		self.c.codelist_work.emit()
 
 	def receive_tr_data(self, screen_no, rqname, trcode, recordname, prev_next, data_len, err_code, msg1, msg2):
@@ -166,13 +198,19 @@ class Kiwoom(QMainWindow):
 		if rqstr2[0] == "opt10001req":
 			code = rqstr[1]
 			self.code_data[code] = ()
-			for dbstr in codeDataName:
+			for i in range(len(codeDataName)-1): # exclude 입력일
 				data = self.kiwoom.dynamicCall("GetCommData(QString, QString, int, QString",
-										   trcode, recordname, 0, dbstr)
+										   trcode, recordname, 0, codeDataName[i])
 				self.code_data[code] = self.code_data[code] + (data.strip(),)
+			if self.code_data[code][0] == '':
+				# exception: sometimes '' data is coming.
+				return
 			debug_print(self.code_data[code])
 			self.print_data_line(self.code_data[code])
-			self.insert_data_db(self.code_data[code])
+			if self.data_mode == "insert":
+				self.insert_data_db(self.code_data[code])
+			else:
+				self.update_data_db(self.code_data[code])
 
 	def print_header_line(self):
 		header = ""
@@ -193,13 +231,33 @@ class Kiwoom(QMainWindow):
 		for i in range(len(dtuple)):
 			values = values + "'" + dtuple[i] + "'"
 			if i == len(dtuple) - 1:
-				values = values + ");"
+				values = values + ", '" + self.today + "');"
 			else:
 				values = values + ", "
 
 		insert_sql = "INSERT INTO " + self.curMarketTable + " " + values
 		debug_print(insert_sql)
 		self.stock_cur.execute(insert_sql)
+		self.stock_con.commit()
+
+	def update_data_db(self, dtuple):
+		if len(dtuple) + 1 != len(codeDataName):
+			print("ERROR: record field length is different: " + str(len(dtuple)))
+			return
+		set_str = "SET "
+		for i in range(len(codeDataName)):
+			if i == 0 or i == 1:
+				# skip 종목코드 종목명
+				continue
+			set_str = set_str + codeDataName[i] + " = '" + dtuple[i] + "', "
+			if i == len(dtuple) - 1:
+				set_str = set_str + codeDataName[i+1] + " = '" + self.today + "'"
+				break
+		where = "WHERE 종목코드='" + dtuple[0] + "';"
+
+		update_sql = "UPDATE " + self.curMarketTable + " " + set_str + " " + where
+		debug_print(update_sql)
+		self.stock_cur.execute(update_sql)
 		self.stock_con.commit()
 
 	def is_jongmok_in_db(self, code):
@@ -216,13 +274,28 @@ class Kiwoom(QMainWindow):
 			print("ERROR: multiple records for " + code + " count=" + str(len(exist)))
 			return 1
 
+	def get_old_jongmok_in_db(self):
+		search_sql = "SELECT 종목코드 FROM " + self.curMarketTable + " WHERE 입력일!='" + self.today + "';"
+		debug_print(search_sql)
+		self.stock_cur.execute(search_sql)
+		arr_tuple = self.stock_cur.fetchall()
+		#debug_print(arr_tuple)
+		old_list = []
+		for i in range(len(arr_tuple)):
+			if arr_tuple[i][0] != '':
+				old_list.append(arr_tuple[i][0])
+		debug_print("오래된 레코드: " + str(len(old_list)) + "건 존재")
+		debug_print(old_list)
+		return old_list
+
 	def get_codelist(self):
 		count = 0
 		for x in self.code_list:
-			# check 종목코드 exist in DB
-			if self.is_jongmok_in_db(x) == 1:
-				count = count + 1
-				continue
+			if self.data_mode == "insert":
+				# check 종목코드 exist in DB
+				if self.is_jongmok_in_db(x) == 1:
+					count = count + 1
+					continue
 
 			# SetInputValue
 			self.kiwoom.dynamicCall("SetInputValue(QString, QString)", "종목코드",  x)
@@ -238,8 +311,9 @@ class Kiwoom(QMainWindow):
 			else:
 				time.sleep(1)
 
-		# enable JongMok button
+		# enable JongMok & Update button
 		self.JongMok_button.setDisabled(False)
+		self.Update_button.setDisabled(False)
 
 if __name__ == "__main__":
 	app = QApplication(sys.argv)
