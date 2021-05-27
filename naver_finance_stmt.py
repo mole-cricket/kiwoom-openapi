@@ -161,7 +161,10 @@ def test_get_n_parse_jongmok(jongmok_code, quarter):
 
 def get_n_parse_jongmok(jongmok_code, quarter):
 	nf_resp = requests.get(NF_URL + jongmok_code)
-	financial_stmt = pd.read_html(nf_resp.text)[3]
+	try:
+		financial_stmt = pd.read_html(nf_resp.text)[3]
+	except:
+		return None
 	# NOTE: 지수 종목은 재무정보가 없으므로 예외 처리
 	if (('주요재무정보', '주요재무정보', '주요재무정보') in financial_stmt) == False:
 		return None

@@ -92,9 +92,9 @@ def search_company():
 		print("ERROR: kospi kosdaq company record is 0")
 		return
 	# 현분기, 전년동기, 직전분기 hardcoding
-	quarter = "2020.06"
-	py_quarter = "2019.06"
-	pr_quarter = "2020.03"
+	quarter = "2021.03"
+	py_quarter = "2020.03"
+	pr_quarter = "2020.12"
 	rows = []
 	cols = ["종목코드", "종목명", "시가총액", "PER", "EPS", "ROE", "PBR"] + \
 		[py_quarter+" 매출액", py_quarter+" 영업이익"] + \
